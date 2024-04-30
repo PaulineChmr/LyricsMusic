@@ -10,7 +10,7 @@ For an example of how to use the pipeline, please see the main function.
 
 # project imports
 from utils import read_file_contents, full_elapsed_time_str, configure_logging, logger, picklify, unpicklify
-from lyrics2vec import lyrics2vec, LOGS_TF_DIR
+from lyrics2vec import lyrics2vec
 from scrape_lyrics import LYRICS_TXT_DIR
 from lyrics_cnn import LyricsCNN
 
@@ -22,6 +22,12 @@ import string
 import shutil
 import time
 import os
+import graphviz
+import keras
+import matplotlib
+import matplotlib.pyplot as plt
+from keras import utils
+from keras.utils import plot_model
 
 
 # NLTK materials - make sure that you have stopwords and also punkt for some reason
@@ -29,15 +35,14 @@ import nltk
 from nltk import WordPunctTokenizer, word_tokenize
 from nltk.corpus import stopwords
 
-
+LOGS_TF_DIR = 'logs/tf'
 MOOD_CLASSIFICATION_DIR = os.path.join(LOGS_TF_DIR, 'mood_classification')
 os.makedirs(MOOD_CLASSIFICATION_DIR, exist_ok=True)
 MOODS_AND_LYRICS_PICKLE = os.path.join(MOOD_CLASSIFICATION_DIR, 'moods_and_lyrics.pickle')
 VECTORIZED_LYRICS_PICKLE = os.path.join(MOOD_CLASSIFICATION_DIR, 'vectorized_lyrics.pickle')
 X_Y_PICKLE = os.path.join(MOOD_CLASSIFICATION_DIR, 'x_y.pickle')
-LYRICS_CSV_KEEP_COLS = ['msd_id', 'msd_artist', 'msd_title', 'is_english', 'lyrics_available',
-                            'wordcount', 'lyrics_filename', 'mood', 'matched_mood']
-LYRICS_CSV_DTYPES = {'msd_id': str, 'msd_artist': str, 'msd_title': str, 'is_english': int, 'lyrics_available': int, 'wordcount': int, 'lyrics_filename': str, 'mood': str, 'matched_mood': int} 
+LYRICS_CSV_KEEP_COLS = ['Index', 'artist', 'title', 'mood', 'lyrics', 'wordcount']
+LYRICS_CSV_DTYPES = {'Index': int, 'artist': str, 'title': str, 'mood': str, 'lyrics': str, 'wordcount': int} 
 word_tokenizers = {
     None: 0,
     word_tokenize: 1,
@@ -161,6 +166,10 @@ def import_lyrics_data(csv_path, usecols=None, dtype=None):
         # as they are unneeded for the cnn
         usecols = LYRICS_CSV_KEEP_COLS
         dtype = LYRICS_CSV_DTYPES
+    df = pd.read_csv('pauline/mood_data_balanced.csv')
+    if 'wordcount' not in df.columns:
+        df['wordcount'] = df['Lyrics'].apply(len)
+        df.to_csv('pauline/mood_data_balanced.csv', index=False)
     df = pd.read_csv(csv_path, usecols=usecols, dtype=dtype)
     
     logger.info('imported data shape: {0}'.format(df.shape))
@@ -360,7 +369,7 @@ def pad_data(df):
     df_pad = pd.DataFrame(columns = df.columns)
     
     # Let's first try a strategy where we make all the groups as big as the biggest...
-    target_value = max(df.groupby('mood').agg('count').msd_id)
+    target_value = max(df.groupby('mood').agg('count').Index)
 
     for mood in set(df.mood):
         #first we copy each song so that they're all equally represented
@@ -397,14 +406,14 @@ def build_lyrics_dataset(lyrics_csv, word_tokenizer, quadrants, pad_data_flag, p
     """
     # import, filter, and categorize the data
     df = import_lyrics_data(lyrics_csv)
-    df = filter_lyrics_data(df, drop=True, quadrants=quadrants)
-    df = categorize_lyrics_data(df)
+    #df = filter_lyrics_data(df, drop=True, quadrants=quadrants)
+    #df = categorize_lyrics_data(df)
 
     # import the lyrics into the dataframe
     # here we make use of panda's apply function to parallelize the IO operation
-    df['lyrics'] = df.lyrics_filename.apply(lambda x: extract_lyrics_from_file(make_lyrics_txt_path(x)))
-    logger.info('Data shape after lyrics addition: {0}'.format(df.shape))
-    logger.info('Df head:\n{0}'.format(df.lyrics.head()))
+    #df['lyrics'] = df.lyrics_filename.apply(lambda x: extract_lyrics_from_file(make_lyrics_txt_path(x)))
+    #logger.info('Data shape after lyrics addition: {0}'.format(df.shape))
+    #logger.info('Df head:\n{0}'.format(df.lyrics.head()))
     
     cutoff = compute_lyrics_cutoff(df)
     
@@ -596,7 +605,7 @@ def mood_classification(regen_dataset, regen_lyrics2vec_dataset, revectorize_lyr
 
         if regen_dataset:
             logger.info('building lyrics dataset')
-            dfs = build_lyrics_dataset('data/labeled_lyrics_expanded.csv',
+            dfs = build_lyrics_dataset('pauline/mood_data_balanced.csv',
                                        word_tokenizer, quadrants,
                                        pad_data_flag, pad_train_only,
                                        preprocess_col=col_preprocessed_lyrics,
@@ -703,7 +712,7 @@ def mood_classification(regen_dataset, regen_lyrics2vec_dataset, revectorize_lyr
         pretrained_embeddings=None if not use_pretrained_embeddings else lyrics_vectorizer.final_embeddings,
         train_embeddings=cnn_train_embeddings,
         name=name)
-    
+
     logger.info('Checking for prexisting data...')
     # check for prexisting data; we don't want to overwrite something on accident!
     model_summary_dir = os.path.join(cnn.output_dir, 'summaries')
@@ -727,6 +736,7 @@ def mood_classification(regen_dataset, regen_lyrics2vec_dataset, revectorize_lyr
     # launch tensorboard so you can watch your model train!
     tb_proc = None
     if launch_tensorboard:
+        print("this is a test")
         logger.info('Launching tensorboard...')
         tb_models = list()
         if best_model:
@@ -772,13 +782,11 @@ def mood_classification(regen_dataset, regen_lyrics2vec_dataset, revectorize_lyr
      
     return
 
-
 def main():
     
     configure_logging(logname='mood_classification')
     prep_nltk()
     np.random.seed(12)
-    
     logger.info('Starting')
 
     #best = ('w2v0', 'logs/tf/runs/Em-128_FS-3-4-5_NF-128_D-0.5_L2-0.01_B-64_Ep-20/summaries/')
@@ -817,9 +825,9 @@ def main():
         regen_lyrics2vec_dataset=False,
         use_pretrained_embeddings=True,
         regen_pretrained_embeddings=False,
-        revectorize_lyrics=False,
-        skip_to_training=True,
-        cnn_train_embeddings=False,
+        revectorize_lyrics=True,
+        skip_to_training=False,
+        cnn_train_embeddings=True,
         embeddings_train_data_only=False,
         quadrants=True,
         pad_data_flag=True,
@@ -835,7 +843,7 @@ def main():
         l2_reg_lambda=0.01,
         # Training parameters
         batch_size=128,
-        num_epochs=12,
+        num_epochs=50,
         evaluate_every=100,
         checkpoint_every=100,
         num_checkpoints=5,
