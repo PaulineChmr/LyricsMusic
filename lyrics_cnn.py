@@ -595,12 +595,8 @@ def main():
     tb_proc = None
     if args.launch_tensorboard:
         logger.info('Launching tensorboard...')
-        #best = ('w2v0', 'logs/tf/runs/Em-128_FS-3-4-5_NF-128_D-0.5_L2-0.01_B-64_Ep-20/summaries/')
-        #best = ('w2v1_1', 'logs/tf/runs/Em-300_FS-3-4-5_NF-264_D-0.5_L2-0.01_B-128_Ep-10_W2V-1_V-50000/summaries/')
-        #best = ('w2v1_2', 'logs/tf/runs/Em-300_FS-3-4-5_NF-300_D-0.5_L2-0.01_B-64_Ep-20_W2V-1_V-50000/summaries/')   # 52.74
-        best = ('w2v1_3', 'logs/tf/runs/Em-300_FS-3-4-5_NF-300_D-0.75_L2-0.01_B-64_Ep-12_W2V-1_V-50000/summaries/')   # 54.30, 1.832
-        # nope = ('w2v1_4', 'logs/tf/runs/Em-300_FS-3-4-5_NF-300_D-0.75_L2-0.1_B-64_Ep-12_W2V-1_V-50000/summaries')   # 47.36
-        # nope = ('w2v1_5', 'logs/tf/runs/Em-300_FS-3-4-5_NF-300_D-0.75_L2-0.001_B-64_Ep-12_W2V-1_V-50000/summaries') # 54.55, 1.835 -- slightly more overtrained
+        #First try : W2V0, logs\tf\runs\Em-300_FS-3-4-5_NF-300_D-0.8_L2-0.01_B-128_Ep-12_W2V-0-Tr_V-10000_mood-quadrants_padded\summaries, Loss: 0.74, Acc: 0.74
+        #Second try : W2V1, logs\tf\runs\Em-300_FS-3-4-5_NF-300_D-0.8_L2-0.01_B-128_Ep-12_W2V-1-Tr_V-10000_mood-quadrants_padded\summaries, Loss: 0.55, Acc: 0.84
         tb_cmd = build_tensorboard_cmd([best, ('new', model_summary_dir)])
         logger.info(tb_cmd)
         tb_proc = subprocess.Popen(tb_cmd.split())
